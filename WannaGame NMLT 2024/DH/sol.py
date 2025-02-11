@@ -16,14 +16,16 @@ factors = ecm.factor(order1)
 
 K = GF(p)
 res = []
-for i in factors:
+for i in factors[1:-1]:
     g_i = K(pow(g, order1 // i, p))
     b_i = K(pow(B, order1 // i, p))
     order = ZZ(i)
     x = discrete_log(b_i, g_i, ord=order)
     res.append(x)
 
-b = crt(res, factors)
+b = crt(res, factors[1:-1])
+print(factors[1:-1])
+print(factors)
 assert pow(g, b, p) == B
 
 ss = pow(A, b, p)
