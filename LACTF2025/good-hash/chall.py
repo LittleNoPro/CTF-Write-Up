@@ -1,13 +1,14 @@
 from Crypto.Cipher import AES
 import os
 
-FLAG = REDACTED
+FLAG = "lactf{r3us3_n0nc3_1s_very_d4nger0us!!!}"
 
 if __name__ == "__main__":
     print("Can you guess the secret?")
     secret = os.urandom(16)
     key  = os.urandom(16)
     iv = os.urandom(12)
+    cipher = AES.new(key, AES.MODE_GCM, nonce=iv)
     for attempt in range(4):
         choice = input().strip()
         if choice == "1":
