@@ -48,9 +48,9 @@ e = 65537
 
 d = pow(e, -1, t)
 
-# message = int.from_bytes(open("flag.txt", "rb").read(), "big")
+message = int.from_bytes(open("flag.txt", "rb").read(), "big")
 
-# ct = pow(message, e, n)
+ct = pow(message, e, n)
 
-# print(f"n={n}")
-# print(f"ct={ct}")
+print(f"n={n}")
+print(f"ct={ct}")

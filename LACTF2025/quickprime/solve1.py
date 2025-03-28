@@ -28,24 +28,20 @@ for i in tqdm(range(1, (1 << 16))):
     C = -n % m
 
     try:
-        roots = mod((B * B % m - 4 * A * C % m) % m, m).nth_root(2, all=True)
+        roots = mod(B * B - 4 * A * C, m).nth_root(2, all=True)
     except:
         continue
 
     for root in roots:
-        p = int(-B - root) // 2 * pow(A, -1, m) % m
-        q  = (A * p + B) % m
-        flag = find_flag(int(p), int(q))
-        if flag != None:
-            print(flag)
-            exit(0)
+        ps = []
+        ps.append(int(-B - root) // 2 * pow(A, -1, m) % m)
+        ps.append(int(-B + root) // 2 * pow(A, -1, m) % m)
 
-        p = int(-B + root) // 2 * pow(A, -1, m) % m
-        q  = (A * p + B) % m
-        flag = find_flag(int(p), int(q))
-        if flag != None:
-            print(flag)
-            exit(0)
-
+        for p in ps:
+            q  = (A * p + B) % m
+            flag = find_flag(int(p), int(q))
+            if flag != None:
+                print(flag)
+                exit(0)
 
 # lactf{w41t_th1s_1snt_s3cur3_4t_4ll_???}
