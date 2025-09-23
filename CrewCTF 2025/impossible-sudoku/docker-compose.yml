@@ -1,0 +1,8 @@
+services:
+  sudoku-zkp:
+    build: .
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    environment:
+      - FLAG=crew{test_flag}

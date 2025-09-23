@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Impossible Sudoku</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #4e73df;
+            --secondary-color: #2e59d9;
+            --success-color: #1cc88a;
+            --info-color: #36b9cc;
+            --warning-color: #f6c23e;
+            --danger-color: #e74a3b;
+            --dark-color: #5a5c69;
+            --light-color: #f8f9fc;
+            --highlight-color: rgba(78, 115, 223, 0.1);
+        }
+        
+        body {
+            font-family: 'Nunito', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(180deg, var(--light-color) 0%, #e8eaf6 100%);
+            min-height: 100vh;
+            padding-top: 2rem;
+            padding-bottom: 2rem;
+        }
+        
+        .container {
+            max-width: 900px;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 0.5rem;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+            margin-bottom: 1.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .card-header {
+            background: var(--primary-color);
+            color: white;
+            padding: 1rem 1.25rem;
+            border-bottom: none;
+            font-weight: 700;
+        }
+        
+        .card-body {
+            padding: 1.25rem;
+        }
+        
+        #flag-container {
+            background-color: rgba(40, 167, 69, 0.1);
+            border: 1px solid var(--success-color);
+            border-radius: 0.5rem;
+            padding: 1.25rem;
+            padding-left: 3rem; /* Add extra padding on the left to make room for the icon */
+            margin-bottom: 1.5rem;
+            display: none;
+            position: relative;
+        }
+        
+        #flag-container::before {
+            content: '✓';
+            position: absolute;
+            top: 1.25rem;
+            left: 1.25rem;
+            font-size: 1.5rem;
+            color: var(--success-color);
+        }
+        
+        #flag {
+            font-weight: bold;
+            color: var(--success-color);
+            font-family: 'Courier New', monospace;
+            font-size: 1.2rem;
+            padding: 0.5rem;
+            background-color: #f8f9fa;
+            border-radius: 0.25rem;
+            display: inline-block;
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.1);
+        }
+        
+        .sudoku-board {
+            width: 100%;
+            max-width: 450px;
+            aspect-ratio: 1/1;
+            margin: 1.5rem auto;
+            background-color: #fff;
+            border: 3px solid var(--dark-color);
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            grid-template-rows: repeat(9, 1fr);
+            gap: 0;
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.15);
+            border-radius: 0.5rem;
+            overflow: hidden;
+        }
+        
+        .sudoku-cell {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 1px solid #dee2e6;
+            box-sizing: border-box;
+            transition: background-color 0.3s ease;
+        }
+        
+        /* Right borders for 3x3 boxes */
+        .sudoku-cell:nth-child(3n):not(:nth-child(9n)) {
+            border-right: 2px solid var(--dark-color);
+        }
+        
+        /* Bottom borders for 3x3 boxes */
+        .sudoku-cell:nth-child(n+19):nth-child(-n+27),
+        .sudoku-cell:nth-child(n+46):nth-child(-n+54) {
+            border-bottom: 2px solid var(--dark-color);
+        }
+        
+        .sudoku-cell input {
+            width: 100%;
+            height: 100%;
+            border: none;
+            text-align: center;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            background-color: transparent;
+            padding: 0;
+            margin: 0;
+            box-sizing: border-box;
+            transition: all 0.2s ease;
+        }
+        
+        .sudoku-cell input:focus {
+            outline: none;
+            background-color: var(--highlight-color);
+        }
+        
+        .preset {
+            font-weight: bold;
+            color: var(--dark-color);
+            background-color: rgba(90, 92, 105, 0.05) !important;
+        }
+        
+        .filled {
+            animation: pulse 0.3s ease-out;
+        }
+        
+        @keyframes pulse {
+            0% { background-color: var(--highlight-color); }
+            100% { background-color: transparent; }
+        }
+        
+        #progress-container {
+            width: calc(100% - 2rem); /* Account for horizontal margins */
+            margin: 1.5rem 1rem;
+            display: none;
+            box-sizing: border-box;
+        }
+        
+        .progress {
+            height: 1rem;
+            background-color: rgba(0, 0, 0, 0.05);
+            border-radius: 0.5rem;
+            overflow: hidden;
+            width: 100%; /* Ensure progress bar stays within container */
+        }
+        
+        #progress-bar {
+            height: 100%;
+            background-color: var(--success-color);
+            width: 0%;
+            transition: width 0.3s;
+            max-width: 100%; /* Prevent overflow */
+        }
+        
+        #progress-text {
+            text-align: center;
+            margin-top: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--dark-color);
+            font-weight: 600;
+        }
+        
+        .alert {
+            margin-top: 1.25rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        }
+        
+        .btn {
+            border-radius: 0.5rem;
+            font-weight: 600;
+            padding: 0.5rem 1.5rem;
+            transition: all 0.2s;
+            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        }
+        
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--secondary-color);
+            border-color: var(--secondary-color);
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background-color: var(--dark-color);
+            border-color: var(--dark-color);
+        }
+        
+        .btn-secondary:hover {
+            background-color: #484a54;
+            border-color: #484a54;
+            transform: translateY(-2px);
+        }
+        
+        .btn-lg {
+            padding: 0.75rem 2rem;
+            font-size: 1.1rem;
+        }
+        
+        .page-title {
+            color: var(--dark-color);
+            font-weight: 800;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.1);
+            position: relative;
+            display: inline-block;
+        }
+        
+        .page-title:after {
+            content: '';
+            position: absolute;
+            bottom: -10px;
+            left: 0;
+            width: 50px;
+            height: 3px;
+            background: var(--primary-color);
+            border-radius: 3px;
+        }
+        
+        @media (max-width: 768px) {
+            .sudoku-board {
+                max-width: 350px;
+            }
+            
+            .sudoku-cell input {
+                font-size: 1rem;
+            }
+            
+            body {
+                padding-top: 1rem;
+                padding-bottom: 1rem;
+            }
+            
+            .btn {
+                width: 100%;
+                margin-bottom: 0.5rem;
+            }
+            
+            .btn-primary {
+                margin-right: 0 !important;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .sudoku-board {
+                max-width: 100%;
+            }
+            
+            .container {
+                padding-left: 8px;
+                padding-right: 8px;
+            }
+        }
+        
+        /* Animation for flag reveal */
+        @keyframes fadeInScale {
+            0% { opacity: 0; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        
+        .fade-in-scale {
+            animation: fadeInScale 0.5s ease-out forwards;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="text-center mb-4">
+            <h1 class="page-title mb-4">Impossible Sudoku</h1>
+            <p class="lead text-muted">Prove you know the solution without revealing it</p>
+        </div>
+        
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="card mb-4">
+                    <div class="card-body p-0">
+                        <div id="flag-container" class="m-4 fade-in-scale">
+                            <h5 class="mb-3">Verification Successful</h5>
+                            <p class="mb-2">Your solution has been verified! Secret code:</p>
+                            <p id="flag" class="mb-0"></p>
+                        </div>
+                        
+                        <div id="status-container" class="alert alert-info m-4">
+                            <div class="d-flex align-items-center">
+                                <i class="fas fa-info-circle me-3 fa-lg"></i>
+                                <p id="status" class="mb-0">Fill in the grid using numbers 1-9. Each row, column, and 3x3 box must contain each digit exactly once.</p>
+                            </div>
+                        </div>
+                        
+                        <div id="progress-container" class="mx-3 mb-4">
+                            <div class="progress">
+                                <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                            <p id="progress-text">0/500 verification steps completed</p>
+                        </div>
+                        
+                        <div class="text-center">
+                            <div class="sudoku-board" id="sudoku-board">
+                                <!-- Board will be generated by JavaScript -->
+                            </div>
+                            
+                            <div class="mb-4 pb-3 mx-4">
+                                <button id="submit-btn" class="btn btn-primary btn-lg me-2">
+                                    <i class="fas fa-paper-plane me-2"></i>Verify Solution
+                                </button>
+                                <button id="reset-btn" class="btn btn-secondary">
+                                    <i class="fas fa-redo me-2"></i>Reset Board
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Puzzle data from server
+        const initialPuzzle = {{ puzzle|tojson }};
+        
+        // Create the Sudoku board
+        const board = document.getElementById('sudoku-board');
+        
+        // Keep track of all input cells for easy access
+        const inputCells = [];
+        
+        for (let i = 0; i < 9; i++) {
+            for (let j = 0; j < 9; j++) {
+                const cell = document.createElement('div');
+                cell.className = 'sudoku-cell';
+                
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.inputMode = 'numeric'; // Better for mobile keyboards
+                input.maxLength = 1;
+                input.dataset.row = i;
+                input.dataset.col = j;
+                
+                // Set preset values and make them readonly
+                if (initialPuzzle[i][j] !== 0) {
+                    input.value = initialPuzzle[i][j];
+                    input.readOnly = true;
+                    input.className = 'preset';
+                } else {
+                    inputCells.push(input);
+                }
+                
+                // Allow only digits 1-9 and move to next cell when input is entered
+                input.addEventListener('input', function(e) {
+                    if (this.value) {
+                        // Add pulse animation
+                        this.classList.add('filled');
+                        setTimeout(() => {
+                            this.classList.remove('filled');
+                        }, 300);
+                    }
+                    
+                    this.value = this.value.replace(/[^1-9]/g, '');
+                    
+                    // If a valid value was entered, move to the next cell
+                    if (this.value) {
+                        // Find the next cell to focus
+                        const row = parseInt(this.dataset.row);
+                        const col = parseInt(this.dataset.col);
+                        
+                        // Helper function to find next empty cell
+                        const findNextEmptyCell = (startRow, startCol) => {
+                            // First try to go right in the same row
+                            for (let j = startCol + 1; j < 9; j++) {
+                                const nextInput = board.querySelector(`input[data-row="${startRow}"][data-col="${j}"]`);
+                                if (!nextInput.readOnly && !nextInput.value) {
+                                    return nextInput;
+                                }
+                            }
+                            
+                            // Then try subsequent rows
+                            for (let i = startRow + 1; i < 9; i++) {
+                                for (let j = 0; j < 9; j++) {
+                                    const nextInput = board.querySelector(`input[data-row="${i}"][data-col="${j}"]`);
+                                    if (!nextInput.readOnly && !nextInput.value) {
+                                        return nextInput;
+                                    }
+                                }
+                            }
+                            
+                            // If no empty cell is found, return null
+                            return null;
+                        };
+                        
+                        // Find and focus the next empty cell
+                        const nextEmptyCell = findNextEmptyCell(row, col);
+                        if (nextEmptyCell) {
+                            nextEmptyCell.focus();
+                        }
+                    }
+                });
+                
+                // Add keyboard navigation
+                input.addEventListener('keydown', function(e) {
+                    const row = parseInt(this.dataset.row);
+                    const col = parseInt(this.dataset.col);
+                    
+                    // Arrow key navigation
+                    if (e.key === 'ArrowUp' && row > 0) {
+                        board.querySelector(`input[data-row="${row-1}"][data-col="${col}"]`).focus();
+                    } else if (e.key === 'ArrowDown' && row < 8) {
+                        board.querySelector(`input[data-row="${row+1}"][data-col="${col}"]`).focus();
+                    } else if (e.key === 'ArrowLeft' && col > 0) {
+                        board.querySelector(`input[data-row="${row}"][data-col="${col-1}"]`).focus();
+                    } else if (e.key === 'ArrowRight' && col < 8) {
+                        board.querySelector(`input[data-row="${row}"][data-col="${col+1}"]`).focus();
+                    }
+                    // Handle backspace - move to previous cell if current is empty
+                    else if (e.key === 'Backspace' && !this.value && !(row === 0 && col === 0)) {
+                        e.preventDefault();
+                        // Find previous cell
+                        let prevRow = row;
+                        let prevCol = col - 1;
+                        
+                        if (prevCol < 0) {
+                            prevRow--;
+                            prevCol = 8;
+                        }
+                        
+                        const prevInput = board.querySelector(`input[data-row="${prevRow}"][data-col="${prevCol}"]`);
+                        if (prevInput && !prevInput.readOnly) {
+                            prevInput.focus();
+                            // Clear the previous cell's value
+                            prevInput.value = '';
+                        }
+                    }
+                });
+                
+                cell.appendChild(input);
+                board.appendChild(cell);
+            }
+        }
+        
+        // Fetch and apply theme color
+        async function applyThemeColor() {
+            try {
+                const resp = await fetch('/get_theme_color', { cache: 'no-store' });
+                const data = await resp.json();
+                const r = data.r, g = data.g, b = data.b;
+                const root = document.documentElement;
+                root.style.setProperty('--primary-color', `rgb(${r}, ${g}, ${b})`);
+                root.style.setProperty('--secondary-color', `rgba(${r}, ${g}, ${b}, 0.85)`);
+                root.style.setProperty('--highlight-color', `rgba(${r}, ${g}, ${b}, 0.1)`);
+            } catch (e) {
+                // ignore theme failures
+            }
+        }
+
+        // Focus first empty cell on load and apply theme color
+        window.addEventListener('load', () => {
+            applyThemeColor();
+            if (inputCells.length > 0) {
+                inputCells[0].focus();
+            }
+        });
+        
+        // Socket.io instance (will be initialized on submit)
+        let socket = null;
+        
+        // Configuration
+        const ROUNDS = 500;
+        
+        // UI elements
+        const submitBtn = document.getElementById('submit-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const statusEl = document.getElementById('status');
+        const flagContainer = document.getElementById('flag-container');
+        const flagEl = document.getElementById('flag');
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        
+        // Keep track of verification state
+        let verificationInProgress = false;
+        
+        // Reset button handler
+        resetBtn.addEventListener('click', () => {
+            if (verificationInProgress) {
+                if (!confirm('Verification is in progress. Reset anyway?')) {
+                    return;
+                }
+                
+                // Disconnect if in progress
+                if (socket) {
+                    socket.disconnect();
+                    socket = null;
+                }
+            }
+            
+            // Reset the board to initial state
+            for (let i = 0; i < 9; i++) {
+                for (let j = 0; j < 9; j++) {
+                    const input = board.querySelector(`input[data-row="${i}"][data-col="${j}"]`);
+                    if (!input.readOnly) {
+                        input.value = '';
+                    }
+                }
+            }
+            
+            // Reset UI
+            statusEl.textContent = 'Fill in the grid using numbers 1-9. Each row, column, and 3x3 box must contain each digit exactly once.';
+            statusEl.className = 'mb-0';
+            flagContainer.style.display = 'none';
+            progressContainer.style.display = 'none';
+            submitBtn.disabled = false;
+            verificationInProgress = false;
+            
+            // Focus the first empty cell
+            if (inputCells.length > 0) {
+                inputCells[0].focus();
+            }
+        });
+        
+        // Submit button handler
+        submitBtn.addEventListener('click', () => {
+            if (verificationInProgress) {
+                return;
+            }
+            
+            // Check if all cells are filled
+            let allFilled = true;
+            const userSolution = [];
+            let firstEmptyCell = null;
+            
+            for (let i = 0; i < 9; i++) {
+                const row = [];
+                for (let j = 0; j < 9; j++) {
+                    const input = board.querySelector(`input[data-row="${i}"][data-col="${j}"]`);
+                    if (!input.value) {
+                        allFilled = false;
+                        if (!firstEmptyCell) {
+                            firstEmptyCell = input;
+                        }
+                        break;
+                    }
+                    row.push(parseInt(input.value));
+                }
+                if (!allFilled) break;
+                userSolution.push(row);
+            }
+            
+            if (!allFilled) {
+                statusEl.textContent = 'Please fill in all cells before submitting.';
+                statusEl.className = 'mb-0 text-danger';
+                // Focus the first empty cell
+                if (firstEmptyCell) {
+                    firstEmptyCell.focus();
+                }
+                return;
+            }
+            
+            // Start verification
+            verificationInProgress = true;
+            submitBtn.disabled = true;
+            statusEl.textContent = 'Connecting to server...';
+            statusEl.className = 'mb-0';
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+            progressBar.setAttribute('aria-valuenow', '0');
+            progressText.textContent = '0/500 verification steps completed';
+            
+            // Initialize WebSocket connection
+            // Disconnect any existing socket first
+            if (socket) {
+                socket.disconnect();
+            }
+            
+            // Create a new socket connection
+            socket = io({
+                reconnection: true,
+                reconnectionAttempts: 5,
+                reconnectionDelay: 1000
+            });
+            
+            // Set up event listeners
+            setupSocketListeners();
+            
+            // Wait for connection to establish before sending data
+            socket.on('connect', () => {
+                startVerification(userSolution);
+            });
+        });
+        
+        function startVerification(userSolution) {
+            // Send start verification message
+            socket.emit('start_verification', { solution: userSolution });
+        }
+        
+        // Update progress bar consistently
+        function updateProgressBar(current, total) {
+            const percentage = (current / total) * 100;
+            progressBar.style.width = `${percentage}%`;
+            progressBar.setAttribute('aria-valuenow', percentage);
+            progressText.textContent = `${current}/${total} verification steps completed`;
+        }
+        
+        // Function to set up socket listeners
+        function setupSocketListeners() {
+            // Remove any existing listeners to prevent duplicates
+            socket.off('connect');
+            socket.off('disconnect');
+            socket.off('verification_started');
+            socket.off('verification_request');
+            socket.off('verification_round_result');
+            socket.off('verification_complete');
+            socket.off('error');
+            
+            socket.on('connect', () => {
+                // Connection established
+            });
+            
+            socket.on('disconnect', () => {
+                if (verificationInProgress) {
+                    statusEl.textContent = 'Disconnected from server. Please try again.';
+                    statusEl.className = 'mb-0 text-danger';
+                    progressContainer.style.display = 'none';
+                    submitBtn.disabled = false;
+                    verificationInProgress = false;
+                }
+            });
+            
+            socket.on('verification_started', (data) => {
+                statusEl.textContent = "Verifying solution...";
+                updateProgressBar(0, ROUNDS);
+            });
+            
+            socket.on('commitment_request', (data) => {
+                try {
+                    // Extract current solution from the UI
+                    const solution = [];
+                    for (let i = 0; i < 9; i++) {
+                        const row = [];
+                        for (let j = 0; j < 9; j++) {
+                            const input = board.querySelector(`input[data-row="${i}"][data-col="${j}"]`);
+                            row.push(parseInt(input.value));
+                        }
+                        solution.push(row);
+                    }
+                    
+                    // Generate a permutation mapping (1-9 -> random 1-9)
+                    const permutation = generatePermutation();
+                    
+                    // Apply permutation to the solution
+                    const permutedSolution = applySolutionPermutation(solution, permutation);
+                    
+                    // Generate random nonces for each cell
+                    const nonces = generateNonces();
+                    
+                    // Generate commitments (hashes)
+                    const commitments = generateCommitments(permutedSolution, nonces);
+                    
+                    // Save these values for later when the challenge comes
+                    window.currentRound = {
+                        round: data.round,
+                        permutation: permutation,
+                        permutedSolution: permutedSolution,
+                        nonces: nonces,
+                        commitments: commitments
+                    };
+                    
+                    // Send only the commitments to the server
+                    socket.emit('commitment_submission', {
+                        commitments: commitments.flat()  // Flatten 2D array of commitments
+                    });
+                    
+                    // Update progress bar - we count from 0 to ROUNDS
+                    updateProgressBar(data.round - 1, ROUNDS);
+                    
+                } catch (e) {
+                    statusEl.textContent = 'Error generating commitments: ' + e.message;
+                    statusEl.className = 'mb-0 text-danger';
+                    submitBtn.disabled = false;
+                    verificationInProgress = false;
+                }
+            });
+            
+            socket.on('challenge', (data) => {
+                try {
+                    // Retrieve the saved round data
+                    const roundData = window.currentRound;
+                    if (roundData.round !== data.round) {
+                        throw new Error(`Round mismatch: expected ${roundData.round}, got ${data.round}`);
+                    }
+                    
+                    // Determine which cells to reveal based on the challenge
+                    const cellsToReveal = getCellsToReveal(data.type, data.segment, initialPuzzle);
+                    
+                    // Create revealed data for the requested cells
+                    const revealed = [];
+                    for (const cell of cellsToReveal.all) {
+                        const i = cell.i;
+                        const j = cell.j;
+                        revealed.push({
+                            i: i,
+                            j: j,
+                            value: roundData.permutedSolution[i][j],
+                            nonce: roundData.nonces[i][j],
+                            hash: roundData.commitments[i][j]
+                        });
+                    }
+                    
+                    // Send the revealed data to the server
+                    socket.emit('revelation_submission', {
+                        revealed: revealed
+                    });
+                    
+                } catch (e) {
+                    statusEl.textContent = 'Error responding to challenge: ' + e.message;
+                    statusEl.className = 'mb-0 text-danger';
+                    submitBtn.disabled = false;
+                    verificationInProgress = false;
+                }
+            });
+            
+            socket.on('verification_round_result', (data) => {
+                if (data.success) {
+                    updateProgressBar(data.round, ROUNDS);
+                } else {
+                    statusEl.textContent = data.message;
+                    statusEl.className = 'mb-0 text-danger';
+                    progressContainer.style.display = 'none';
+                    submitBtn.disabled = false;
+                    verificationInProgress = false;
+                }
+            });
+            
+            socket.on('verification_complete', (data) => {
+                if (data.success) {
+                    statusEl.textContent = data.message;
+                    statusEl.className = 'mb-0 text-success';
+                    flagContainer.style.display = 'block';
+                    flagEl.textContent = data.flag;
+                } else {
+                    statusEl.textContent = data.message;
+                    statusEl.className = 'mb-0 text-danger';
+                    submitBtn.disabled = false;
+                }
+                
+                verificationInProgress = false;
+                
+                // Disconnect after completion
+                if (socket) {
+                    socket.disconnect();
+                    socket = null;
+                }
+            });
+            
+            socket.on('error', (data) => {
+                statusEl.textContent = data.message;
+                statusEl.className = 'mb-0 text-danger';
+                submitBtn.disabled = false;
+                verificationInProgress = false;
+                
+                // Disconnect on error
+                if (socket) {
+                    socket.disconnect();
+                    socket = null;
+                }
+            });
+        }
+        
+        // ZKP Functions
+        function generateProof(solution, puzzle, verifyType, segment) {
+            // 1. Generate a permutation mapping
+            const permutation = generatePermutation();
+            
+            // 2. Apply permutation to the solution
+            const permutedSolution = applySolutionPermutation(solution, permutation);
+            
+            // 3. Generate random nonces for each cell
+            const nonces = generateNonces();
+            
+            // 4. Generate commitments (hashes)
+            const commitments = generateCommitments(permutedSolution, nonces);
+            
+            // 5. Determine cells to reveal based on verify type and segment
+            const cellsToReveal = getCellsToReveal(verifyType, segment, puzzle);
+            
+            // 6. Create revealed data for the requested cells
+            const revealed = [];
+            for (const cell of cellsToReveal.all) {
+                const i = cell.i;
+                const j = cell.j;
+                revealed.push({
+                    i: i,
+                    j: j,
+                    value: permutedSolution[i][j],
+                    nonce: nonces[i][j],
+                    hash: commitments[i][j]
+                });
+            }
+            
+            return {
+                commitments: commitments.flat(),  // Flatten 2D array
+                revealed: revealed
+            };
+        }
+        
+        function generatePermutation() {
+            // Create a permutation of digits 1-9
+            const digits = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+            
+            // Fisher-Yates shuffle
+            for (let i = digits.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [digits[i], digits[j]] = [digits[j], digits[i]];
+            }
+            
+            // Create a mapping from original to permuted
+            const permutation = {};
+            for (let i = 0; i < 9; i++) {
+                permutation[i + 1] = digits[i];
+            }
+            
+            return permutation;
+        }
+        
+        function applySolutionPermutation(solution, permutation) {
+            const permutedSolution = [];
+            
+            for (let i = 0; i < 9; i++) {
+                const row = [];
+                for (let j = 0; j < 9; j++) {
+                    row.push(permutation[solution[i][j]]);
+                }
+                permutedSolution.push(row);
+            }
+            
+            return permutedSolution;
+        }
+        
+        function generateNonces() {
+            const nonces = [];
+            
+            for (let i = 0; i < 9; i++) {
+                const row = [];
+                for (let j = 0; j < 9; j++) {
+                    // Generate a random string
+                    row.push(Math.random().toString(36).substring(2, 15));
+                }
+                nonces.push(row);
+            }
+            
+            return nonces;
+        }
+        
+        function generateCommitments(permutedSolution, nonces) {
+            const commitments = [];
+            
+            for (let i = 0; i < 9; i++) {
+                const row = [];
+                for (let j = 0; j < 9; j++) {
+                    const value = permutedSolution[i][j];
+                    const nonce = nonces[i][j];
+                    
+                    // Create a hash commitment
+                    const hash = sha256(nonce + "-" + value);
+                    
+                    row.push(hash);
+                }
+                commitments.push(row);
+            }
+            
+            return commitments;
+        }
+        
+        function getCellsToReveal(verifyType, segment, puzzle) {
+            const dim = 9;
+            const sdim = 3;
+            const ret = [];
+            const mainOnly = [];
+            const revealedPresets = new Set();
+            
+            if (verifyType === 'row') {
+                for (let j = 0; j < dim; j++) {
+                    const i = segment;
+                    if (puzzle[i][j] !== 0) {
+                        revealedPresets.add(puzzle[i][j]);
+                    }
+                    mainOnly.push({i: i, j: j});
+                }
+            } else if (verifyType === 'column') {
+                for (let i = 0; i < dim; i++) {
+                    const j = segment;
+                    if (puzzle[i][j] !== 0) {
+                        revealedPresets.add(puzzle[i][j]);
+                    }
+                    mainOnly.push({i: i, j: j});
+                }
+            } else if (verifyType === 'square') {
+                const p = Math.floor(segment / sdim) * sdim;
+                const q = (segment % sdim) * sdim;
+                for (let i = p; i < p + sdim; i++) {
+                    for (let j = q; j < q + sdim; j++) {
+                        if (puzzle[i][j] !== 0) {
+                            revealedPresets.add(puzzle[i][j]);
+                        }
+                        mainOnly.push({i: i, j: j});
+                    }
+                }
+            } else if (verifyType === 'preset') {
+                // Reveal all preset cells
+                for (let i = 0; i < dim; i++) {
+                    for (let j = 0; j < dim; j++) {
+                        if (puzzle[i][j] !== 0) {
+                            mainOnly.push({i: i, j: j});
+                        }
+                    }
+                }
+            }
+            
+            // Copy main cells to all cells
+            for (const cell of mainOnly) {
+                ret.push({...cell});
+            }
+            
+            // Add green cells (cells with values from revealedPresets)
+            if (verifyType !== 'preset') {
+                for (let i = 0; i < dim; i++) {
+                    for (let j = 0; j < dim; j++) {
+                        // Skip if already in main cells
+                        if (mainOnly.some(cell => cell.i === i && cell.j === j)) {
+                            continue;
+                        }
+                        
+                        if (puzzle[i][j] !== 0 && revealedPresets.has(puzzle[i][j])) {
+                            ret.push({i: i, j: j});
+                        }
+                    }
+                }
+            }
+            
+            return {
+                all: ret,
+                mainOnly: mainOnly,
+                revealedPresets: Array.from(revealedPresets)
+            };
+        }
+    </script>
+    
+    <!-- Bootstrap JS (optional) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
