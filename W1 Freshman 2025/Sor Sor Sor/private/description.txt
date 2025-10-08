@@ -1,0 +1,6 @@
+- Challenge Name: Sor Sor Sor
+- Author: L1ttl3
+- Points: 100
+- Description:
+Let's begin with an easy XOR challenge.
+Format flag: W1{A-Za-z0-9_}
