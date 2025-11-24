@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import os
+from Crypto.Util.number import bytes_to_long
+import networkx as nx
+
+def graph(tags: list):
+    assert(len(tags) == 5)
+    G = nx.DiGraph()
+    G.add_nodes_from(tags)
+    edges = []
+    for i in range(len(tags)):
+        j1, j2 = (i+1) % len(tags), (i+3) % len(tags)
+        edges.append((tags[i], tags[j1]))
+        edges.append((tags[i], tags[j2]))
+    G.add_edges_from(edges)
+    return G
+
+TAGS = ["crypto", "misc", "pwn", "rev", "web"]
+
+GRAPH = graph(TAGS)
+
+def result(s1: str, s2: str):
+    if (s1 == s2):
+        return "tie"
+
+    if ((s1, s2) in GRAPH.edges):
+        return "win"
+    elif ((s2, s1) in GRAPH.edges):
+        return "lose"
+
+def RNGesus():
+    state = bytes_to_long(os.urandom(8))
+    while (True):
+        yield state & 0xf
+        for _ in range(4):
+            bit = (state ^ (state >> 3) ^ (state >> 7)) & 1
+            state = (state >> 1) | (bit << 63)
+
+def main():
+
+    n = 100
+
+    print("Welcome to C.M.P.R.W.")
+    print(f"If you win against the computer {n * 2} time in a row. You may claim our [SPECIAL] reward.")
+    print("Here, have some free trials as new-comer goodies.")
+
+    rng = RNGesus()
+
+    for _ in range(n):
+        choice = next(rng) % 5
+        inp = input("Choose one of 'crypto', 'misc', 'pwn', 'rev', 'web': ")
+        if (inp not in TAGS):
+            print("error")
+            exit(0)
+        else:
+            res = result(inp, TAGS[choice])
+            print(res)
+
+    for _ in range(n * 2):
+        choice = next(rng) % 5
+        inp = input("Choose one of 'crypto', 'misc', 'pwn', 'rev', 'web': ")
+        if (inp not in TAGS):
+            print("error")
+            exit(0)
+        else:
+            res = result(inp, TAGS[choice])
+            print(res)
+            if (res != "win"):
+                print("Sorry. Better luck next time.")
+                exit(0)
+    else:
+        with open("flag.txt", "r") as f:
+            print(f"Congratulations! Here is your prize! {f.read()}")
+
+
+if __name__ == "__main__":
+    SystemExit(main())

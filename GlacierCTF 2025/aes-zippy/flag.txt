@@ -1,0 +1,1 @@
+glacierctf{test_flag_local}
